@@ -5,11 +5,15 @@ import UserProfileForm from './components/UserProfileForm'
 import Dashboard from './components/Dashboard'
 import SubscriptionPlans from './components/SubscriptionPlans'
 import ProgressTracker from './components/ProgressTracker'
+import RecipeInstructions from './components/RecipeInstructions'
+import { AuthProvider } from './hooks/useAuth.jsx'
+import { paymentService } from './services/stripe'
 
 function App() {
   const [currentView, setCurrentView] = useState('landing')
   const [user, setUser] = useState(null)
   const [userProfile, setUserProfile] = useState(null)
+  const [selectedMeal, setSelectedMeal] = useState(null)
 
   useEffect(() => {
     // Load user data from localStorage on app start
@@ -47,15 +51,27 @@ function App() {
     setCurrentView('subscription')
   }
 
-  const handleSubscriptionComplete = (tier) => {
-    const updatedUser = {
-      ...user,
-      subscriptionTier: tier,
-      subscriptionExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+  const handleSubscriptionComplete = async (tier) => {
+    try {
+      // In a real app, this would handle Stripe payment
+      const { subscription, error } = await paymentService.handleSubscription(tier, user.id, user.email)
+      
+      if (error) {
+        console.error('Subscription error:', error)
+        return
+      }
+
+      const updatedUser = {
+        ...user,
+        subscriptionTier: tier,
+        subscriptionExpiresAt: subscription.currentPeriodEnd
+      }
+      setUser(updatedUser)
+      localStorage.setItem('nourish-user', JSON.stringify(updatedUser))
+      setCurrentView('dashboard')
+    } catch (err) {
+      console.error('Error completing subscription:', err)
     }
-    setUser(updatedUser)
-    localStorage.setItem('nourish-user', JSON.stringify(updatedUser))
-    setCurrentView('dashboard')
   }
 
   const handleLogout = () => {
@@ -64,6 +80,11 @@ function App() {
     setUser(null)
     setUserProfile(null)
     setCurrentView('landing')
+  }
+
+  const handleMealSelect = (meal) => {
+    setSelectedMeal(meal)
+    setCurrentView('recipe')
   }
 
   const renderCurrentView = () => {
@@ -75,24 +96,43 @@ function App() {
       case 'subscription':
         return <SubscriptionPlans onSubscribe={handleSubscriptionComplete} />
       case 'dashboard':
-        return <Dashboard user={user} profile={userProfile} onNavigate={setCurrentView} />
+        return <Dashboard 
+          user={user} 
+          profile={userProfile} 
+          onNavigate={setCurrentView}
+          onMealSelect={handleMealSelect}
+        />
       case 'progress':
-        return <ProgressTracker user={user} profile={userProfile} onBack={() => setCurrentView('dashboard')} />
+        return <ProgressTracker 
+          user={user} 
+          profile={userProfile} 
+          onBack={() => setCurrentView('dashboard')} 
+        />
+      case 'recipe':
+        return <RecipeInstructions 
+          meal={selectedMeal}
+          userProfile={userProfile}
+          onBack={() => setCurrentView('dashboard')}
+        />
       default:
         return <LandingPage onSignUp={handleSignUp} />
     }
   }
 
   return (
-    <div className="min-h-screen bg-bg">
-      {(currentView === 'dashboard' || currentView === 'progress') ? (
-        <AppShell user={user} onLogout={handleLogout} onNavigate={setCurrentView}>
-          {renderCurrentView()}
-        </AppShell>
-      ) : (
-        renderCurrentView()
-      )}
-    </div>
+    <AuthProvider>
+      <div className="min-h-screen bg-bg">
+        {(currentView === 'dashboard' || currentView === 'progress') ? (
+          <AppShell user={user} onLogout={handleLogout} onNavigate={setCurrentView}>
+            {renderCurrentView()}
+          </AppShell>
+        ) : currentView === 'recipe' ? (
+          renderCurrentView()
+        ) : (
+          renderCurrentView()
+        )}
+      </div>
+    </AuthProvider>
   )
 }
 
