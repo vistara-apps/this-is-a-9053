@@ -6,7 +6,7 @@ import Dashboard from './components/Dashboard'
 import SubscriptionPlans from './components/SubscriptionPlans'
 import ProgressTracker from './components/ProgressTracker'
 import RecipeInstructions from './components/RecipeInstructions'
-import { AuthProvider } from './hooks/useAuth'
+import { AuthProvider } from './hooks/useAuth.jsx'
 import { paymentService } from './services/stripe'
 
 function App() {
